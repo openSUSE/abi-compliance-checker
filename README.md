@@ -1,6 +1,6 @@
 ### py-abi-compliance-checker
 
-If you maintain packages written in C or C++, changes are you're already familiar with the `abi-compliance-checker` and `abi-dumper` tools.
+If you maintain packages written in C or C++, chances are you're already familiar with the `abi-compliance-checker` and `abi-dumper` tools.
 
 If you're not, please click the links and read more about them, they're great tools.
 
