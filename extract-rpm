@@ -1,0 +1,10 @@
+#!/bin/bash
+
+for arg in "$@"
+do
+	if [[ -f $arg ]]; then
+		rpm2cpio "$arg" | cpio -idmv
+	else
+		echo "$arg does not exist. Skipping..."
+	fi
+done

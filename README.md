@@ -28,7 +28,7 @@ At some point, it may support better OBS/IBS integration, so it should be able t
 
 1. Install `abi-compliance-checker` using `zypper`.
 
-2. Clone this repository, maybe place its scripts in your `$PATH`. `extract-rpm` is a tiny, convenient Bash script that extracts RPMs.
+2. Clone this repository, maybe place its scripts in your `$PATH`. Make sure they're executable. `extract-rpm` is a tiny, convenient Bash script that extracts RPMs.
 
 3. Download the RPMs you want to compare, move them to their dedicated directory, and extract them. For this example, we'd be comparing a fictional package `libfoo` from `openSUSE:Factory` to an older version on IBS:
 
