@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from glob import glob
+from typing import Set
 
 import os
 import shutil
@@ -10,28 +11,17 @@ import sys
 EXECUTABLE_NAME = "abi-compliance-checker"
 
 
-def has_extension(filename, *extensions):
-    expanded_extensions = list(extensions) + list(
-        map(lambda ext: ext.upper(), extensions)
-    )
-
-    valid = [filename.endswith(ext) for ext in expanded_extensions]
-    if not any(valid):
-        return False
-
-    return True
-
-
-def generate_xml(version, directory):
-    headers = set()
-    shared_objects = set()
+def generate_xml(version: str, directory: str):
+    headers: Set[str] | str = set()
+    shared_objects: Set[str] | str = set()
 
     filenames = glob(os.path.join(directory, "**"), recursive=True)
-    for filename in filenames:
-        if has_extension(filename, ".h", ".hpp"):
-            headers.add(filename)
 
-        if has_extension(filename, ".so"):
+    for filename in filenames:
+        ext = os.path.splitext(filename)[1].lower()
+        if ext in [".h", ".hpp", ".hh", ".hxx", ".h++"]:
+            headers.add(filename)
+        if ext in [".so"]:
             shared_objects.add(filename)
 
     headers = "\n".join(headers)
