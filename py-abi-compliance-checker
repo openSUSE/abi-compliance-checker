@@ -4,68 +4,191 @@ from glob import glob
 from typing import Set
 
 import os
+import re
 import shutil
 import subprocess
 import sys
+import json
 
-EXECUTABLE_NAME = "abi-compliance-checker"
+EXECUTABLE_NAME_CHECKER = "abi-compliance-checker"
+EXECUTABLE_NAME_DUMPER = "abi-dumper"
 
+def find_library_debuginfo(library, debuginfos):
+    basename = os.path.basename(library)
 
-def generate_xml(version: str, directory: str):
-    headers: Set[str] | str = set()
-    shared_objects: Set[str] | str = set()
+    for debuginfo in debuginfos:
+        if basename in debuginfo:
+            return debuginfo
 
-    filenames = glob(os.path.join(directory, "**"), recursive=True)
+def find_files(name, version, directory):
+    headers = set()
+    libraries = set()
+    debuginfos = set()
 
+    cwd = os.getcwd()
+    os.chdir(directory)
+    filenames = glob("**", recursive=True)
     for filename in filenames:
-        ext = os.path.splitext(filename)[1].lower()
-        if ext in [".h", ".hpp", ".hh", ".hxx", ".h++"]:
-            headers.add(filename)
-        if ext in [".so"]:
-            shared_objects.add(filename)
+        if not (os.path.islink(filename):
+            ext = os.path.splitext(filename)[1].lower()
+            if ext in [".h", ".hpp", ".hh", ".hxx", ".h++"]:
+                headers.add(filename)             
+            elif ext == ".debug":
+                debuginfos.add(filename)
+            elif ext == ".so" or bool(re.match(".so\.[.0-9]+", ext)):
+                libraries.add(filename)
 
-    headers = "\n".join(headers)
-    shared_objects = "\n".join(shared_objects)
+    headers = list(headers)
+    libraries = list(libraries)
+    debuginfos = list(debuginfos)
 
-    output = f"<version>{version}</version>"
-    output = f"{output}\n<headers>\n{headers}\n</headers>"
-    output = f"{output}\n<libs>\n{shared_objects}\n</libs>"
+    libraries_debuginfos = {}
+    for library in libraries:
+        libraries_debuginfos[library] = find_library_debuginfo(library, debuginfos)
+        if not libraries_debuginfos[library]:
+            raise Exception(
+                f"Cannot find debuginfo for library from {name}-{version}: {library}"
+            )
 
-    return output
+    os.chdir(cwd)
+    return {
+        "headers": list(headers),
+        "libraries": list(libraries),
+        "libraries_basenames": [os.path.basename(name) for name in libraries],
+        "libraries_debuginfos": libraries_debuginfos,
+        "debuginfos": list(debuginfos),
+    }
 
 
 def main():
-    executable = shutil.which(EXECUTABLE_NAME)
-    if not executable:
-        print(f"{EXECUTABLE_NAME} not installed")
+    executable_checker = shutil.which(EXECUTABLE_NAME_CHECKER)
+    if not executable_checker:
+        print(f"{EXECUTABLE_NAME_CHECKER} not installed")
+        sys.exit(1)
+
+    executable_dumper = shutil.which(EXECUTABLE_NAME_DUMPER)
+    if not executable_dumper:
+        print(f"{EXECUTABLE_NAME_DUMPER} not installed")
         sys.exit(1)
 
     try:
         name = sys.argv[1]
-        v1, v1_dir = sys.argv[2], sys.argv[3]
-        v2, v2_dir = sys.argv[4], sys.argv[5]
+        v1, v1_dir = sys.argv[2], os.path.abspath(sys.argv[3])
+        v2, v2_dir = sys.argv[4], os.path.abspath(sys.argv[5])
     except IndexError:
         print("Usage: <package name> <v1> <v1 directory> <v2> <v2 directory>")
         sys.exit(1)
 
-    print(f"Found executable: {executable}")
-    print(f"Comparing: {v1} -> {v2}")
+    dir_output = os.path.abspath(f"./{name}-{v1}-to-{v2}")
+    dir_output_abidumps = os.path.join(dir_output, "abidumps")
+    dir_output_html = os.path.join(dir_output, "html")
+
+    for d in [dir_output, dir_output_abidumps, dir_output_html]:
+        try:
+            os.mkdir(d)
+        except FileExistsError:
+            print(f"Directory already exists: {d}")
+            print("Please delete or rename it, then try again.")
+            sys.exit(1)
+        except OSError as e:
+            print(f"Directory could not be created: {d}")
+            print(f"Exception: {str(e)}")
+            sys.exit(1)
+
+    print(f"Found executable (checker): {executable_checker}")
+    print(f"Found executable (dumper): {executable_dumper}")
+    print(f"Comparing: {name}-{v1} -> {name}-{v2}")
     print(f"Directory for {v1}: {v1_dir}")
     print(f"Directory for {v2}: {v2_dir}")
 
-    v1_xml_filename = f"{v1}.xml"
-    with open(v1_xml_filename, "w") as handle:
-        print(f"Creating: {v1_xml_filename}")
-        handle.write(generate_xml(v1, v1_dir))
+    v1_filename_report = os.path.join(dir_output, f"{v1}_report.json")
+    v1_report = find_files(name, v1, v1_dir)
+    v2_filename_report = os.path.join(dir_output, f"{v2}_report.json")
+    v2_report = find_files(name, v2, v2_dir)
 
-    v2_xml_filename = f"{v2}.xml"
-    with open(v2_xml_filename, "w") as handle:
-        print(f"Creating: {v2_xml_filename}")
-        handle.write(generate_xml(v2, v2_dir))
+    v1_libraries_basenames = set(v1_report["libraries_basenames"])
+    v2_libraries_basenames = set(v1_report["libraries_basenames"])
 
-    subprocess.run(
-        [executable, "-lib", name, "-old", v1_xml_filename, "-new", v2_xml_filename]
+    v1_report[f"libraries_in_{v1}_not_in_{v2}"] = list(
+        v1_libraries_basenames - v2_libraries_basenames
     )
+    v2_report[f"libraries_in_{v2}_not_in_{v1}"] = list(
+        v2_libraries_basenames - v1_libraries_basenames
+    )
+
+    with open(v1_filename_report, "w") as handle:
+        print(f"Creating: {v1_filename_report}")
+        handle.write(json.dumps(v1_report, indent=4))
+
+    with open(v2_filename_report, "w") as handle:
+        print(f"Creating: {v2_filename_report}")
+        handle.write(json.dumps(v2_report, indent=4))
+
+    for library_v1 in v1_report["libraries"]:
+        basename_v1 = os.path.basename(library_v1)
+        for library_v2 in v2_report["libraries"]:
+            basename_v2 = os.path.basename(library_v2)
+            if basename_v1 == basename_v2:
+                debuginfo_v1 = os.path.dirname(
+                    v1_report["libraries_debuginfos"][library_v1]
+                )
+                dumpname_v1 = os.path.join(
+                    dir_output_abidumps, f"{basename_v1}-{v1}.abidump"
+                )
+
+                debuginfo_v2 = os.path.dirname(
+                    v2_report["libraries_debuginfos"][library_v2]
+                )
+                dumpname_v2 = os.path.join(
+                    dir_output_abidumps, f"{basename_v2}-{v2}.abidump"
+                )
+
+                print(
+                    f"Will compare: '{library_v1}' ({name}-{v1}) <===> '{library_v2}' ({name}-{v2})"
+                )
+
+                os.chdir(v1_dir)
+                command_dumper_v1 = [
+                    executable_dumper,
+                    "-lver",
+                    v1,
+                    "-search-debuginfo",
+                    debuginfo_v1,
+                    "-o",
+                    dumpname_v1,
+                    library_v1,
+                ]
+                print("Running: ", command_dumper_v1)
+                subprocess.run(command_dumper_v1)
+
+                os.chdir(v2_dir)
+                command_dumper_v2 = [
+                    executable_dumper,
+                    "-lver",
+                    v2,
+                    "-search-debuginfo",
+                    debuginfo_v2,
+                    "-o",
+                    dumpname_v2,
+                    library_v2,
+                ]
+                print("Running: ", command_dumper_v2)
+                subprocess.run(command_dumper_v2)
+
+                os.chdir(dir_output)
+                command_checker = [
+                    executable_checker,
+                    "-l",
+                    basename_v1,
+                    "-old",
+                    dumpname_v1,
+                    "-new",
+                    dumpname_v2,
+                    "-report-path",
+                    os.path.join(dir_output_html, f"{name}-{v1}-to-{v2}-{basename_v1}.html"),
+                ]
+                print("Running: ", command_checker)
+                subprocess.run(command_checker)
 
 
 if __name__ == "__main__":
