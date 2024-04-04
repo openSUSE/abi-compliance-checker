@@ -29,7 +29,7 @@ def find_files(name, version, directory):
     os.chdir(directory)
     filenames = glob("**", recursive=True)
     for filename in filenames:
-        if not (os.path.islink(filename):
+        if not os.path.islink(filename):
             ext = os.path.splitext(filename)[1].lower()
             if ext in [".h", ".hpp", ".hh", ".hxx", ".h++"]:
                 headers.add(filename)             
