@@ -34,7 +34,7 @@ def find_files(name, version, directory):
                 headers.add(filename)             
             elif ext == ".debug":
                 debuginfos.add(filename)
-            elif ext == ".so" or bool(re.match(".so\.[.0-9]+", ext)):
+            elif ext == ".so" or bool(re.match(r".*.so.[.0-9]+$", filename)):
                 libraries.add(filename)
 
     libraries_debuginfos = {}
