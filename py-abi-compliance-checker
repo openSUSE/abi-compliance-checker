@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 from glob import glob
-from typing import Set
 
 import os
 import re
