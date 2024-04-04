@@ -12,28 +12,12 @@ import json
 EXECUTABLE_NAME_CHECKER = "abi-compliance-checker"
 EXECUTABLE_NAME_DUMPER = "abi-dumper"
 
-
-def has_extension(filename, *extensions):
-    expanded_extensions = list(extensions) + list(
-        map(lambda ext: ext.upper(), extensions)
-    )
-
-    valid = [
-        filename.endswith(ext) or re.match(ext, filename) for ext in expanded_extensions
-    ]
-    if not any(valid):
-        return False
-
-    return True
-
-
 def find_library_debuginfo(library, debuginfos):
     basename = os.path.basename(library)
 
     for debuginfo in debuginfos:
         if basename in debuginfo:
             return debuginfo
-
 
 def find_files(name, version, directory):
     headers = set()
@@ -44,22 +28,14 @@ def find_files(name, version, directory):
     os.chdir(directory)
     filenames = glob("**", recursive=True)
     for filename in filenames:
-        if has_extension(filename, ".h", ".hpp") and not os.path.islink(filename):
-            headers.add(filename)
-
-        if (
-            has_extension(filename, r".*\.so$|.*\.so\.[.0-9]+")
-            and not has_extension(filename, ".debug")
-            and not os.path.islink(filename)
-        ):
-            libraries.add(filename)
-
-        if has_extension(filename, ".debug") and not os.path.islink(filename):
-            debuginfos.add(filename)
-
-    headers = list(headers)
-    libraries = list(libraries)
-    debuginfos = list(debuginfos)
+        if not os.path.islink(filename):
+            ext = os.path.splitext(filename)[1].lower()
+            if ext in [".h", ".hpp", ".hh", ".hxx", ".h++"]:
+                headers.add(filename)             
+            elif ext == ".debug":
+                debuginfos.add(filename)
+            elif ext == ".so" or bool(re.match(r".*.so.[.0-9]+$", filename)):
+                libraries.add(filename)
 
     libraries_debuginfos = {}
     for library in libraries:
