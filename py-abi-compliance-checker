@@ -37,10 +37,6 @@ def find_files(name, version, directory):
             elif ext == ".so" or bool(re.match(".so\.[.0-9]+", ext)):
                 libraries.add(filename)
 
-    headers = list(headers)
-    libraries = list(libraries)
-    debuginfos = list(debuginfos)
-
     libraries_debuginfos = {}
     for library in libraries:
         libraries_debuginfos[library] = find_library_debuginfo(library, debuginfos)
